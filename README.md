@@ -3,56 +3,70 @@
 Explainable Heterogeneous Graph Neural Networks for Biomedical Knowledge Graph
 Completion and Drug–Disease Association Prediction.
 
-## Quick Start
+The goal is **drug repurposing**: predict missing `(drug, treats, disease)` links in the
+[Hetionet](https://github.com/hetio/hetionet) knowledge graph using a Heterogeneous Graph
+Transformer (HGT) encoder and a DistMult decoder.
+
+## Status
+
+| Stage | State |
+|---|---|
+| Data download and ID mapping | Done |
+| Heterogeneous graph (drug, gene, disease) | Done |
+| Leak-free train / validation / test split | Done |
+| HGT encoder + DistMult decoder | Done |
+| Training loop and evaluation (AUROC, AUPRC) | In progress |
+| Explainability (GNNExplainer, attention, paths) | Planned |
+| Streamlit dashboard, FastAPI, Docker deployment | Planned |
+
+## Graph
+
+| Node type | Count | | Relation | Edges |
+|---|---|---|---|---|
+| drug | 1,552 | | drug treats disease (target) | 755 |
+| gene | 20,945 | | drug targets gene | 11,571 |
+| disease | 137 | | disease associated with gene | 12,623 |
+
+The 755 `treats` edges are split 80 / 10 / 10 with one negative sample per positive.
+Reverse copies of held-out edges are removed from the training graph to prevent data leakage.
+
+## Setup
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+venv\Scripts\activate           # Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
-
-# 1. Download data
-python -m src.data.download
-
-# 2. Build graph + train model
-python main.py --mode train
-
-# 3. Explain a prediction
-python main.py --mode explain --drug Metformin --disease PCOS
-
-# 4. Run the dashboard
-streamlit run src/app/dashboard.py
-
-# 5. Run the API
-uvicorn src.app.api:app --reload
 ```
 
-## Project Structure
+## Run what exists today
+
+```bash
+# 1. Download Hetionet into data/raw/
+python -m src.data.download
+
+# 2. Check the graph split (prints positive/negative counts)
+python test_split.py
+
+# 3. Check the model forward pass and initial loss
+python test_model.py
+```
+
+## Project structure
 
 ```
 biograph-ai/
-├── data/                  # raw, processed, and graph data
 ├── src/
-│   ├── data/              # download, ID mapping, graph construction, splitting
-│   ├── models/             # HGT encoder + DistMult decoder
-│   ├── training/            # training loop, negative sampling, evaluation
-│   ├── explainability/      # attention, GNNExplainer, path-based explanations
-│   ├── utils/                # config, logging
-│   └── app/                  # Streamlit dashboard + FastAPI serving
-├── notebooks/                 # exploratory analysis, case studies
-├── experiments/configs/       # yaml configs per run
-├── tests/                     # pytest unit tests
-├── main.py                    # CLI entry point (train / evaluate / explain)
-├── Dockerfile
+│   ├── data/          # download, ID mapping, graph construction, split
+│   ├── models/        # HGT encoder, DistMult decoder, full model
+│   └── training/      # training loop and evaluation
+├── tests/             # unit tests
 └── requirements.txt
 ```
 
-## Running Tests
+Other folders (`explainability/`, `app/`, `utils/`) are placeholders for the planned stages.
 
-```bash
-pytest tests/ -v
-```
+## Notes
 
-## Deployment
-
-See `Dockerfile` for containerized deployment, or push to Streamlit Community
-Cloud / Hugging Face Spaces for a free hosted demo.
+- Raw Hetionet files (about 90 MB) are not stored in this repository. Run the download step above.
+- Node features are random for now; real biological features are a planned improvement.
+- Only 3 of Hetionet's 11 node types are used so far.

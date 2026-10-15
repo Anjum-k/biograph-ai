@@ -1,5 +1,4 @@
 import torch
-from torch_geometric import data
 
 from src.data.split import TARGET_EDGE
 from src.models.biograph_model import BioGraphModel

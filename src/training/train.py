@@ -69,8 +69,9 @@ def train_one_epoch(model, data, optimizer, loss_fn):
     return loss.item()
 
 
-def main(epochs=100, lr=0.001):
-    torch.manual_seed(42)
+def main(epochs=100, lr=0.001, seed=42):
+    torch.manual_seed(seed)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     train_data, val_data, test_data = load_data()
@@ -84,6 +85,8 @@ def main(epochs=100, lr=0.001):
 
     CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
     best_val_auroc = 0.0
+    patience = 25
+    bad_epochs = 0
 
     for epoch in range(1, epochs + 1):
         loss = train_one_epoch(model, train_data, optimizer, loss_fn)
@@ -91,7 +94,13 @@ def main(epochs=100, lr=0.001):
 
         if val_auroc > best_val_auroc:
             best_val_auroc = val_auroc
+            bad_epochs = 0
             torch.save(model.state_dict(), CHECKPOINT_PATH)
+        else:
+            bad_epochs += 1
+            if bad_epochs >= patience:
+                print(f"Early stopping at epoch {epoch}")
+                break
 
         if epoch == 1 or epoch % 5 == 0:
             print(f"epoch {epoch:3d} | loss {loss:.4f} | val AUROC {val_auroc:.4f} | val AUPRC {val_auprc:.4f}")
@@ -100,6 +109,7 @@ def main(epochs=100, lr=0.001):
     test_auroc, test_auprc = evaluate(model, test_data)
     print(f"best val AUROC {best_val_auroc:.4f}")
     print(f"TEST  AUROC {test_auroc:.4f} | AUPRC {test_auprc:.4f}")
+    return best_val_auroc, test_auroc, test_auprc
 
 
 if __name__ == "__main__":

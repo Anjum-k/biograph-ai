@@ -1,12 +1,21 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV PYTHONHASHSEED=0 \
+    PYTHONUNBUFFERED=1 \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
-COPY . .
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
-EXPOSE 8501
+COPY requirements-docker.txt .
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
-CMD ["streamlit", "run", "src/app/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+COPY src ./src
+COPY experiments/final_model.pt ./experiments/final_model.pt
+
+RUN python -m src.data.download
+
+EXPOSE 8501 8000
+
+CMD ["sh", "-c", "python -m streamlit run src/app/streamlit_app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true"]

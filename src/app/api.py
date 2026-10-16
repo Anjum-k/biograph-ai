@@ -1,48 +1,49 @@
-"""FastAPI service exposing a /predict endpoint."""
-import sys
-from pathlib import Path
+from contextlib import asynccontextmanager
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))
+from fastapi import FastAPI, HTTPException, Query
 
-from fastapi import FastAPI
-import torch
+from src.app.biograph_service import BioGraphService
 
-from src.models.biograph_model import BioGraphModel
-from src.utils.config import EXPERIMENTS_DIR, MODEL_CONFIG
-
-app = FastAPI(title="BioGraph AI API")
-
-CKPT_PATH = EXPERIMENTS_DIR / "best_model.pt"
-_model = None
+state = {}
 
 
-def get_model(metadata):
-    global _model
-    if _model is None:
-        _model = BioGraphModel(
-            MODEL_CONFIG["hidden_channels"],
-            MODEL_CONFIG["out_channels"],
-            MODEL_CONFIG["num_heads"],
-            MODEL_CONFIG["num_layers"],
-            metadata,
-        )
-        if CKPT_PATH.exists():
-            _model.load_state_dict(torch.load(CKPT_PATH, map_location="cpu"))
-        _model.eval()
-    return _model
+@asynccontextmanager
+async def lifespan(app):
+    state["service"] = BioGraphService()
+    yield
+    state.clear()
+
+
+app = FastAPI(title="BioGraph AI", lifespan=lifespan)
+
+DISCLAIMER = (
+    "Research prototype. Rankings are hypotheses from the Hetionet graph "
+    "for experts to check. Not medical advice."
+)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "model_loaded": "service" in state}
 
 
-@app.get("/predict")
-def predict(drug: str, disease: str):
-    # Plug in your loaded graph_data + name-to-index mappings here, then:
-    # score = ... run model.forward(...) on the relevant indices ...
-    return {
-        "drug": drug,
-        "disease": disease,
-        "note": "Wire this endpoint to your trained graph_data + id mappings.",
-    }
+@app.get("/drugs")
+def drugs():
+    return {"drugs": state["service"].drug_names()}
+
+
+@app.get("/rank")
+def rank(
+    drug: str,
+    top_n: int = Query(10, ge=1, le=50),
+    include_known: bool = False,
+):
+    service = state["service"]
+    if drug not in service.drug_index:
+        raise HTTPException(status_code=404, detail=f"Unknown drug: {drug}")
+
+    rows = service.rank_diseases(drug, top_n=top_n, include_known=include_known)
+    for row in rows:
+        row["gnn_score"] = round(row.pop("gnn_prob"), 3)
+
+    return {"drug": drug, "disclaimer": DISCLAIMER, "results": rows}

@@ -1,6 +1,8 @@
 venv/
+.venv/
 __pycache__/
 .pytest_cache/
 data/raw/
-experiments/*.pt
 data/processed/
+experiments/*.pt
+!experiments/final_model.pt
